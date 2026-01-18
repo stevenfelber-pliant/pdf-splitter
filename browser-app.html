@@ -605,9 +605,9 @@
 
         // Event Listeners
         dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', handleDragOver);
-        dropZone.addEventListener('dragleave', handleDragLeave);
-        dropZone.addEventListener('drop', handleDrop);
+        dropZone.addEventListener('dragover', handleFileDragOver);
+        dropZone.addEventListener('dragleave', handleFileDragLeave);
+        dropZone.addEventListener('drop', handleFileDrop);
         fileInput.addEventListener('change', handleFileSelect);
         document.getElementById('split-btn').addEventListener('click', splitPdf);
         document.getElementById('cancel-btn').addEventListener('click', reset);
@@ -619,18 +619,18 @@
             document.getElementById('help-dialog').style.display = 'block';
         });
 
-        // Drag & Drop Handlers
-        function handleDragOver(e) {
+        // File Upload Drag & Drop Handlers
+        function handleFileDragOver(e) {
             e.preventDefault();
             dropZone.classList.add('drag-over');
         }
 
-        function handleDragLeave(e) {
+        function handleFileDragLeave(e) {
             e.preventDefault();
             dropZone.classList.remove('drag-over');
         }
 
-        function handleDrop(e) {
+        function handleFileDrop(e) {
             e.preventDefault();
             dropZone.classList.remove('drag-over');
             const files = e.dataTransfer.files;
@@ -944,24 +944,52 @@
         // Generiert Thumbnail-Canvas für alle Seiten
         async function generateThumbnails() {
             pageThumbnails = [];
-            const scale = 0.3;  // Kleine Vorschau
+            const scale = 0.5;  // Größere Vorschau für bessere Sichtbarkeit
 
             for (let pageNum = 1; pageNum <= currentPdfDoc.numPages; pageNum++) {
-                const page = await currentPdfDoc.getPage(pageNum);
-                const viewport = page.getViewport({ scale });
+                try {
+                    updateLoadingText(`Erstelle Vorschaubild ${pageNum} von ${currentPdfDoc.numPages}...`);
 
-                const canvas = document.createElement('canvas');
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                canvas.className = 'thumbnail-canvas';
+                    const page = await currentPdfDoc.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: scale });
 
-                const context = canvas.getContext('2d');
-                await page.render({
-                    canvasContext: context,
-                    viewport: viewport
-                }).promise;
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
 
-                pageThumbnails.push(canvas);
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    canvas.className = 'thumbnail-canvas';
+
+                    // Canvas mit weißem Hintergrund initialisieren
+                    context.fillStyle = 'white';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // PDF-Seite rendern
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+
+                    await page.render(renderContext).promise;
+
+                    pageThumbnails.push(canvas);
+
+                    console.log(`Thumbnail ${pageNum} erstellt: ${canvas.width}x${canvas.height}`);
+                } catch (error) {
+                    console.error(`Fehler beim Erstellen von Thumbnail ${pageNum}:`, error);
+                    // Fallback: Leeres Canvas mit Fehlertext
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 120;
+                    canvas.height = 170;
+                    const context = canvas.getContext('2d');
+                    context.fillStyle = '#f7fafc';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+                    context.fillStyle = '#667eea';
+                    context.font = '14px sans-serif';
+                    context.textAlign = 'center';
+                    context.fillText('Fehler', canvas.width / 2, canvas.height / 2);
+                    pageThumbnails.push(canvas);
+                }
             }
         }
 
@@ -999,9 +1027,9 @@
                 pagesDiv.dataset.groupId = group.id;
 
                 // Drag & Drop Events für Container
-                pagesDiv.addEventListener('dragover', handleDragOver);
-                pagesDiv.addEventListener('drop', handleDrop);
-                pagesDiv.addEventListener('dragleave', handleDragLeave);
+                pagesDiv.addEventListener('dragover', handlePageDragOver);
+                pagesDiv.addEventListener('drop', handlePageDrop);
+                pagesDiv.addEventListener('dragleave', handlePageDragLeave);
 
                 // Seiten hinzufügen
                 group.pages.forEach(pageNum => {
@@ -1033,21 +1061,21 @@
             pageDiv.appendChild(badge);
 
             // Drag Events
-            pageDiv.addEventListener('dragstart', handleDragStart);
-            pageDiv.addEventListener('dragend', handleDragEnd);
+            pageDiv.addEventListener('dragstart', handlePageDragStart);
+            pageDiv.addEventListener('dragend', handlePageDragEnd);
 
             return pageDiv;
         }
 
-        // Drag & Drop Handlers
-        function handleDragStart(e) {
+        // Page Thumbnail Drag & Drop Handlers
+        function handlePageDragStart(e) {
             draggedElement = e.target.closest('.page-thumbnail');
             draggedElement.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/html', draggedElement.innerHTML);
         }
 
-        function handleDragEnd(e) {
+        function handlePageDragEnd(e) {
             if (draggedElement) {
                 draggedElement.classList.remove('dragging');
                 draggedElement = null;
@@ -1058,7 +1086,7 @@
             });
         }
 
-        function handleDragOver(e) {
+        function handlePageDragOver(e) {
             if (e.preventDefault) {
                 e.preventDefault();
             }
@@ -1070,12 +1098,12 @@
             return false;
         }
 
-        function handleDragLeave(e) {
+        function handlePageDragLeave(e) {
             const container = e.currentTarget;
             container.closest('.invoice-group').classList.remove('drag-over');
         }
 
-        function handleDrop(e) {
+        function handlePageDrop(e) {
             if (e.stopPropagation) {
                 e.stopPropagation();
             }
