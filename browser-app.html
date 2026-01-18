@@ -953,44 +953,78 @@
                     const page = await currentPdfDoc.getPage(pageNum);
                     const viewport = page.getViewport({ scale: scale });
 
+                    // Canvas erstellen und konfigurieren
                     const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-
                     canvas.width = viewport.width;
                     canvas.height = viewport.height;
                     canvas.className = 'thumbnail-canvas';
 
-                    // Canvas mit weißem Hintergrund initialisieren
-                    context.fillStyle = 'white';
+                    const context = canvas.getContext('2d', { alpha: false });
+
+                    // Weißer Hintergrund
+                    context.fillStyle = '#FFFFFF';
                     context.fillRect(0, 0, canvas.width, canvas.height);
 
-                    // PDF-Seite rendern
+                    // PDF-Seite rendern mit background
                     const renderContext = {
                         canvasContext: context,
-                        viewport: viewport
+                        viewport: viewport,
+                        background: 'white',
+                        enableWebGL: false
                     };
 
-                    await page.render(renderContext).promise;
+                    const renderTask = page.render(renderContext);
+                    await renderTask.promise;
+
+                    // Verifizieren, dass Canvas Daten enthält
+                    const imageData = context.getImageData(0, 0, Math.min(10, canvas.width), Math.min(10, canvas.height));
+                    const hasData = imageData.data.some((value, index) => {
+                        // Prüfe nur RGB-Werte (nicht Alpha bei jedem 4. Index)
+                        if (index % 4 === 3) return false;
+                        return value !== 255; // Nicht komplett weiß
+                    });
+
+                    if (hasData) {
+                        console.log(`✓ Thumbnail ${pageNum} erstellt: ${canvas.width}x${canvas.height}px (mit Inhalt)`);
+                    } else {
+                        console.warn(`⚠️ Thumbnail ${pageNum} wurde erstellt, aber scheint leer zu sein`);
+                    }
 
                     pageThumbnails.push(canvas);
-
-                    console.log(`Thumbnail ${pageNum} erstellt: ${canvas.width}x${canvas.height}`);
                 } catch (error) {
-                    console.error(`Fehler beim Erstellen von Thumbnail ${pageNum}:`, error);
-                    // Fallback: Leeres Canvas mit Fehlertext
+                    console.error(`❌ Fehler beim Erstellen von Thumbnail ${pageNum}:`, error);
+
+                    // Fallback: Canvas mit Platzhalter
                     const canvas = document.createElement('canvas');
-                    canvas.width = 120;
-                    canvas.height = 170;
+                    canvas.width = 100;
+                    canvas.height = 141;  // A4 Verhältnis
+                    canvas.className = 'thumbnail-canvas';
+
                     const context = canvas.getContext('2d');
+
+                    // Grauer Hintergrund
                     context.fillStyle = '#f7fafc';
                     context.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Rahmen
+                    context.strokeStyle = '#e2e8f0';
+                    context.lineWidth = 2;
+                    context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+
+                    // Fehlertext
                     context.fillStyle = '#667eea';
-                    context.font = '14px sans-serif';
+                    context.font = 'bold 12px sans-serif';
                     context.textAlign = 'center';
-                    context.fillText('Fehler', canvas.width / 2, canvas.height / 2);
+                    context.textBaseline = 'middle';
+                    context.fillText(`Seite ${pageNum}`, canvas.width / 2, canvas.height / 2 - 10);
+                    context.font = '10px sans-serif';
+                    context.fillText('(Fehler)', canvas.width / 2, canvas.height / 2 + 10);
+
                     pageThumbnails.push(canvas);
                 }
             }
+
+            console.log(`✓ Alle ${pageThumbnails.length} Thumbnails erstellt`);
         }
 
         // Rendert die Preview mit allen Gruppen
@@ -1050,8 +1084,17 @@
             pageDiv.dataset.pageNum = pageNum;
             pageDiv.dataset.groupId = groupId;
 
-            // Canvas hinzufügen
-            const canvas = pageThumbnails[pageNum - 1].cloneNode(true);
+            // Canvas mit Pixel-Daten kopieren (cloneNode kopiert NICHT die Pixel!)
+            const sourceCanvas = pageThumbnails[pageNum - 1];
+            const canvas = document.createElement('canvas');
+            canvas.width = sourceCanvas.width;
+            canvas.height = sourceCanvas.height;
+            canvas.className = sourceCanvas.className;
+
+            // Pixel-Daten kopieren mit drawImage
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(sourceCanvas, 0, 0);
+
             pageDiv.appendChild(canvas);
 
             // Seitennummer-Badge
