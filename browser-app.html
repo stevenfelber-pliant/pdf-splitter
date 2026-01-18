@@ -1309,8 +1309,9 @@
                     const group = validGroups[i];
                     updateLoadingText(`Erstelle PDF ${i + 1} von ${validGroups.length}...`);
 
-                    const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
-                    const newPdf = await PDFLib.PDFDocument.create();
+                    const { PDFDocument } = PDFLib;
+                    const pdfDoc = await PDFDocument.load(arrayBuffer);
+                    const newPdf = await PDFDocument.create();
 
                     // Seiten kopieren
                     const copiedPages = await newPdf.copyPages(
@@ -1370,7 +1371,8 @@
                 document.getElementById('split-btn').disabled = false;
             } catch (error) {
                 console.error('Fehler beim Teilen der PDF:', error);
-                alert('Fehler beim Teilen der PDF. Bitte versuchen Sie es erneut.');
+                console.error('Error stack:', error.stack);
+                alert(`Fehler beim Teilen der PDF: ${error.message}\n\nBitte öffnen Sie die Browser-Konsole (F12) für Details.`);
                 hideLoading();
                 document.getElementById('split-btn').disabled = false;
             }
