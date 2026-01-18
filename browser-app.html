@@ -529,39 +529,83 @@
             }
         }
 
-        // Rechnungserkennung
+        // Rechnungserkennung mit verbesserter Kontext-Analyse
         async function detectInvoices(pdfDoc) {
-            const invoices = [];
-            let currentInvoice = null;
             const totalPages = pdfDoc.numPages;
+            const pageAnalysis = [];
 
+            // Schritt 1: Alle Seiten analysieren und Scores berechnen
             for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
                 const page = await pdfDoc.getPage(pageNum);
                 const textContent = await page.getTextContent();
                 const text = textContent.items.map(item => item.str).join(' ');
 
-                const isInvoiceStart = detectInvoiceHeader(text);
-                const isEmpty = isEmptyPage(text);
+                const analysis = {
+                    pageNum: pageNum,
+                    text: text,
+                    isEmpty: isEmptyPage(text),
+                    isDocumentStart: calculateDocumentStartScore(text, pageNum),
+                    invoiceNumber: extractInvoiceNumber(text),
+                    pageNumberInfo: extractPageNumberInfo(text),
+                    hasReceipt: detectReceipt(text),
+                    assigned: false
+                };
 
-                if (isInvoiceStart) {
+                pageAnalysis.push(analysis);
+            }
+
+            // Schritt 2: Dokumente gruppieren basierend auf Scores und Kontext
+            const invoices = [];
+            let currentInvoice = null;
+
+            for (let i = 0; i < pageAnalysis.length; i++) {
+                const page = pageAnalysis[i];
+
+                // Leerseiten überspringen, aber aktuelle Rechnung beenden
+                if (page.isEmpty) {
+                    if (currentInvoice) {
+                        invoices.push(currentInvoice);
+                        currentInvoice = null;
+                    }
+                    page.assigned = true;
+                    continue;
+                }
+
+                // Hoher Score = neue Rechnung beginnt
+                const isNewDocument = page.isDocumentStart > 3;
+
+                // Prüfen ob es eine Folgeseite ist (basierend auf Seitennummern)
+                const isContinuation = currentInvoice && page.pageNumberInfo &&
+                    page.pageNumberInfo.currentPage > 1;
+
+                if (isNewDocument && !isContinuation) {
                     // Neue Rechnung beginnt
                     if (currentInvoice) {
                         invoices.push(currentInvoice);
                     }
                     currentInvoice = {
-                        startPage: pageNum,
-                        endPage: pageNum,
-                        invoiceNumber: extractInvoiceNumber(text),
-                        pages: [pageNum]
+                        startPage: page.pageNum,
+                        endPage: page.pageNum,
+                        invoiceNumber: page.invoiceNumber || page.hasReceipt || `Dokument_${page.pageNum}`,
+                        pages: [page.pageNum],
+                        isReceipt: !!page.hasReceipt
                     };
-                } else if (isEmpty && currentInvoice) {
-                    // Leerseite beendet aktuelle Rechnung
-                    invoices.push(currentInvoice);
-                    currentInvoice = null;
+                    page.assigned = true;
                 } else if (currentInvoice) {
                     // Fortsetzung der aktuellen Rechnung
-                    currentInvoice.endPage = pageNum;
-                    currentInvoice.pages.push(pageNum);
+                    currentInvoice.endPage = page.pageNum;
+                    currentInvoice.pages.push(page.pageNum);
+                    page.assigned = true;
+                } else {
+                    // Erste Seite oder verwaiste Seite - neue Gruppe starten
+                    currentInvoice = {
+                        startPage: page.pageNum,
+                        endPage: page.pageNum,
+                        invoiceNumber: page.invoiceNumber || page.hasReceipt || `Dokument_${page.pageNum}`,
+                        pages: [page.pageNum],
+                        isReceipt: !!page.hasReceipt
+                    };
+                    page.assigned = true;
                 }
             }
 
@@ -570,12 +614,27 @@
                 invoices.push(currentInvoice);
             }
 
-            // Falls keine Rechnungen erkannt wurden, gesamtes PDF als eine Rechnung behandeln
+            // WICHTIG: Prüfen ob alle Seiten zugewiesen sind
+            const unassignedPages = pageAnalysis
+                .filter(p => !p.assigned && !p.isEmpty)
+                .map(p => p.pageNum);
+
+            if (unassignedPages.length > 0) {
+                console.warn('Nicht zugewiesene Seiten gefunden:', unassignedPages);
+                invoices.push({
+                    startPage: Math.min(...unassignedPages),
+                    endPage: Math.max(...unassignedPages),
+                    invoiceNumber: 'Sonstige_Seiten',
+                    pages: unassignedPages.sort((a, b) => a - b)
+                });
+            }
+
+            // Falls keine Rechnungen erkannt wurden, gesamtes PDF als eine Einheit
             if (invoices.length === 0) {
                 invoices.push({
                     startPage: 1,
                     endPage: totalPages,
-                    invoiceNumber: 'Dokument',
+                    invoiceNumber: 'Komplettes_Dokument',
                     pages: Array.from({ length: totalPages }, (_, i) => i + 1)
                 });
             }
@@ -583,44 +642,136 @@
             return invoices;
         }
 
-        // Prüft ob Text einen Rechnungskopf enthält
-        function detectInvoiceHeader(text) {
-            const keywords = [
-                /rechnung\s*(?:nr|nummer|#)?[:.\s]*\d+/i,
-                /invoice\s*(?:no|number|#)?[:.\s]*\d+/i,
+        // Berechnet Score für Dokumentstart (höher = wahrscheinlicher ein neues Dokument)
+        function calculateDocumentStartScore(text, pageNum) {
+            let score = 0;
+
+            // Rechnungskopf-Keywords (starker Indikator)
+            const invoiceKeywords = [
+                /\brechnung\b.*(?:nr|nummer|#|no).*\d+/i,
+                /\binvoice\b.*(?:no|number|#).*\d+/i,
                 /rechnungsnummer/i,
                 /invoice\s+date/i,
-                /re-\d+/i,
-                /facture\s+n°/i
+                /\bre-\d+/i
             ];
 
-            return keywords.some(pattern => pattern.test(text));
+            if (invoiceKeywords.some(pattern => pattern.test(text))) {
+                score += 5;
+            }
+
+            // Kassenbons/Belege (starker Indikator)
+            const receiptKeywords = [
+                /kassenbon/i,
+                /kassenbeleg/i,
+                /\bbeleg\b/i,
+                /\bquittung\b/i,
+                /\bbon\b/i,
+                /receipt/i
+            ];
+
+            if (receiptKeywords.some(pattern => pattern.test(text))) {
+                score += 5;
+            }
+
+            // Firmenname/Adresse am Anfang (mittlerer Indikator)
+            const firstLines = text.substring(0, 300);
+            if (/(?:GmbH|AG|Ltd|Inc|UG)/i.test(firstLines)) {
+                score += 2;
+            }
+
+            // Datum in den ersten Zeilen (schwacher Indikator)
+            if (/\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{2}-\d{2}/i.test(firstLines)) {
+                score += 1;
+            }
+
+            // "Seite 1" oder "Page 1" (starker Indikator für Anfang)
+            if (/(?:seite|page)\s*1\s*(?:von|of|\/)/i.test(text)) {
+                score += 3;
+            }
+
+            return score;
+        }
+
+        // Erkennt Kassenbons/Belege
+        function detectReceipt(text) {
+            const receiptKeywords = [
+                /kassenbon/i,
+                /kassenbeleg/i,
+                /\bbeleg\b.*\d+/i,
+                /\bquittung\b/i,
+                /\bbon\b.*(?:nr|nummer)/i,
+                /receipt\s*(?:no|#)/i,
+                /\bbon-?nr/i
+            ];
+
+            for (const pattern of receiptKeywords) {
+                const match = text.match(pattern);
+                if (match) {
+                    // Versuche Belegnummer zu extrahieren
+                    const numberMatch = text.match(/(?:bon|beleg|receipt)[\s-]*(?:nr|no|nummer)?[:\s-]*(\d+)/i);
+                    if (numberMatch) {
+                        return `Beleg_${numberMatch[1]}`;
+                    }
+                    return 'Kassenbon';
+                }
+            }
+
+            return null;
+        }
+
+        // Extrahiert Seitennummer-Informationen (z.B. "Seite 2 von 3")
+        function extractPageNumberInfo(text) {
+            const patterns = [
+                /(?:seite|page)\s*(\d+)\s*(?:von|of|\/)\s*(\d+)/i,
+                /(\d+)\s*\/\s*(\d+)/
+            ];
+
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    return {
+                        currentPage: parseInt(match[1]),
+                        totalPages: parseInt(match[2])
+                    };
+                }
+            }
+
+            return null;
         }
 
         // Prüft ob Seite leer ist
         function isEmptyPage(text) {
             const cleanText = text.replace(/\s/g, '');
-            return cleanText.length < 50; // Weniger als 50 Zeichen = leer
+            return cleanText.length < 50;
         }
 
         // Extrahiert Rechnungsnummer
         function extractInvoiceNumber(text) {
             const patterns = [
-                /rechnung\s*(?:nr|nummer)?[:\s]*([A-Z0-9\-\/]+)/i,
-                /invoice\s*(?:no|number)?[:\s]*([A-Z0-9\-\/]+)/i,
-                /rechnungsnummer[:\s]*([A-Z0-9\-\/]+)/i,
-                /(RE-\d+)/i,
+                /rechnung\s*(?:nr|nummer)?[:\s-]*([A-Z0-9\-\/]+)/i,
+                /invoice\s*(?:no|number)?[:\s-]*([A-Z0-9\-\/]+)/i,
+                /rechnungsnummer[:\s-]*([A-Z0-9\-\/]+)/i,
+                /\bRE-(\d+)/i,
+                /\bRG-(\d+)/i,
                 /([0-9]{4}[-\/][0-9]+)/
             ];
 
             for (const pattern of patterns) {
                 const match = text.match(pattern);
                 if (match) {
-                    return match[1].trim();
+                    return sanitizeFileName(match[1].trim());
                 }
             }
 
             return null;
+        }
+
+        // Bereinigt Dateinamen für sicheren Download
+        function sanitizeFileName(name) {
+            return name
+                .replace(/[^a-zA-Z0-9\-_]/g, '_')  // Nur sichere Zeichen
+                .replace(/_{2,}/g, '_')            // Mehrfache Unterstriche entfernen
+                .substring(0, 50);                 // Maximale Länge
         }
 
         // Ergebnisse anzeigen
@@ -636,15 +787,20 @@
                 const pageCount = invoice.pages.length;
                 const div = document.createElement('div');
                 div.className = 'invoice-item';
+
+                // Icon basierend auf Typ
+                const icon = invoice.isReceipt ? '🧾' : '📄';
+                const type = invoice.isReceipt ? 'Kassenbon' : 'Rechnung';
+
                 div.innerHTML = `
                     <div class="invoice-header">
                         <span class="invoice-number">
-                            ${invoice.invoiceNumber || `Rechnung ${index + 1}`}
+                            ${icon} ${invoice.invoiceNumber || `${type} ${index + 1}`}
                         </span>
                         <span class="invoice-badge">${pageCount} Seite${pageCount !== 1 ? 'n' : ''}</span>
                     </div>
                     <div class="invoice-details">
-                        Seiten ${invoice.startPage} - ${invoice.endPage}
+                        Seiten ${invoice.startPage}${invoice.startPage !== invoice.endPage ? ' - ' + invoice.endPage : ''}
                     </div>
                 `;
                 invoiceList.appendChild(div);
@@ -659,6 +815,30 @@
             try {
                 const arrayBuffer = await currentPdfFile.arrayBuffer();
                 splitPdfs = [];
+
+                // Validierung: Alle Seiten prüfen
+                const totalPages = currentPdfDoc.numPages;
+                const assignedPages = new Set();
+                detectedInvoices.forEach(inv => {
+                    inv.pages.forEach(p => assignedPages.add(p));
+                });
+
+                // Warnung wenn Seiten fehlen
+                const allPages = new Set(Array.from({ length: totalPages }, (_, i) => i + 1));
+                const missingPages = [...allPages].filter(p => !assignedPages.has(p));
+
+                if (missingPages.length > 0) {
+                    console.warn('WARNUNG: Folgende Seiten wurden nicht zugewiesen:', missingPages);
+                    alert(`WARNUNG: ${missingPages.length} Seite(n) wurden nicht zugewiesen! Sie werden in "Fehlende_Seiten.pdf" gespeichert.`);
+
+                    // Fehlende Seiten als eigenes Dokument hinzufügen
+                    detectedInvoices.push({
+                        startPage: Math.min(...missingPages),
+                        endPage: Math.max(...missingPages),
+                        invoiceNumber: 'Fehlende_Seiten',
+                        pages: missingPages.sort((a, b) => a - b)
+                    });
+                }
 
                 for (let i = 0; i < detectedInvoices.length; i++) {
                     const invoice = detectedInvoices[i];
@@ -676,7 +856,10 @@
                     copiedPages.forEach(page => newPdf.addPage(page));
 
                     const pdfBytes = await newPdf.save();
-                    const fileName = `${invoice.invoiceNumber || `Rechnung_${i + 1}`}.pdf`.replace(/[^a-zA-Z0-9\-_\.]/g, '_');
+
+                    // Sicherer Dateiname mit Fallback
+                    let baseName = invoice.invoiceNumber || `Dokument_${String(i + 1).padStart(3, '0')}`;
+                    const fileName = sanitizeFileName(baseName) + '.pdf';
 
                     splitPdfs.push({
                         fileName: fileName,
@@ -687,6 +870,14 @@
                     // Fortschritt aktualisieren
                     const progress = ((i + 1) / detectedInvoices.length) * 100;
                     document.getElementById('split-progress').style.width = progress + '%';
+                }
+
+                // Finale Validierung
+                const totalSplitPages = splitPdfs.reduce((sum, pdf) => sum + pdf.invoice.pages.length, 0);
+                console.log(`Validierung: ${totalPages} Originalseiten, ${totalSplitPages} Seiten in PDFs`);
+
+                if (totalSplitPages !== totalPages) {
+                    alert(`WARNUNG: Seitenanzahl stimmt nicht überein! Original: ${totalPages}, Gesplittet: ${totalSplitPages}`);
                 }
 
                 displayResults();
@@ -735,9 +926,17 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = pdf.fileName;
+            a.download = sanitizeFileName(pdf.fileName.replace('.pdf', '')) + '.pdf';
+
+            // Für bessere Browser-Kompatibilität
+            document.body.appendChild(a);
             a.click();
-            URL.revokeObjectURL(url);
+
+            // Cleanup mit kleiner Verzögerung
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
         };
 
         // Alle PDFs als ZIP herunterladen
@@ -747,22 +946,49 @@
             try {
                 const zip = new JSZip();
 
-                splitPdfs.forEach(pdf => {
-                    zip.file(pdf.fileName, pdf.data);
+                // PDFs mit sicheren Dateinamen hinzufügen
+                splitPdfs.forEach((pdf, index) => {
+                    // Doppelte Sanitization für maximale Sicherheit
+                    const safeName = sanitizeFileName(pdf.fileName.replace('.pdf', '')) + '.pdf';
+                    zip.file(safeName, pdf.data, {
+                        binary: true,
+                        compression: "DEFLATE",
+                        compressionOptions: { level: 6 }
+                    });
                 });
 
-                const zipBlob = await zip.generateAsync({ type: 'blob' });
-                const url = URL.createObjectURL(zipBlob);
+                // ZIP mit korrekten Optionen generieren
+                const zipBlob = await zip.generateAsync({
+                    type: 'blob',
+                    compression: "DEFLATE",
+                    compressionOptions: { level: 6 },
+                    mimeType: 'application/zip'
+                });
+
+                // Timestamp für eindeutigen Dateinamen
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+                const zipFileName = `Rechnungen_${timestamp}.zip`;
+
+                // Download mit korrektem MIME-Type
+                const url = URL.createObjectURL(new Blob([zipBlob], { type: 'application/zip' }));
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'rechnungen.zip';
+                a.download = zipFileName;
+
+                // Für bessere Browser-Kompatibilität
+                document.body.appendChild(a);
                 a.click();
-                URL.revokeObjectURL(url);
+
+                // Cleanup mit kleiner Verzögerung
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
 
                 hideLoading();
             } catch (error) {
                 console.error('Fehler beim Erstellen der ZIP:', error);
-                alert('Fehler beim Erstellen der ZIP-Datei.');
+                alert('Fehler beim Erstellen der ZIP-Datei: ' + error.message);
                 hideLoading();
             }
         }
