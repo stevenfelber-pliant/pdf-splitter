@@ -1315,16 +1315,55 @@
                     updateLoadingText(`Erstelle PDF ${i + 1} von ${validGroups.length}...`);
 
                     const newPdf = await PDFDocument.create();
-                    console.log(`Kopiere Seiten für Gruppe ${i + 1}:`, group.pages);
+                    console.log(`Verarbeite Seiten für Gruppe ${i + 1}:`, group.pages);
 
-                    // Seiten kopieren
-                    const copiedPages = await newPdf.copyPages(
-                        sourcePdfDoc,
-                        group.pages.map(p => p - 1) // 0-basiert
-                    );
+                    // Versuche erst normales Kopieren, falls das PDF nicht verschlüsselt ist
+                    try {
+                        const copiedPages = await newPdf.copyPages(
+                            sourcePdfDoc,
+                            group.pages.map(p => p - 1) // 0-basiert
+                        );
 
-                    console.log(`${copiedPages.length} Seiten kopiert`);
-                    copiedPages.forEach(page => newPdf.addPage(page));
+                        copiedPages.forEach(page => newPdf.addPage(page));
+                        console.log(`${copiedPages.length} Seiten direkt kopiert (schneller Weg)`);
+                    } catch (copyError) {
+                        console.warn('Direktes Kopieren fehlgeschlagen, verwende Render-Methode:', copyError);
+
+                        // Fallback: Seiten als Bilder rendern (funktioniert auch bei verschlüsselten PDFs)
+                        for (const pageNum of group.pages) {
+                            updateLoadingText(`Erstelle PDF ${i + 1}/${validGroups.length}, Seite ${pageNum}...`);
+
+                            // Seite mit PDF.js rendern
+                            const page = await currentPdfDoc.getPage(pageNum);
+                            const scale = 2.0; // Höhere Qualität für Output
+                            const viewport = page.getViewport({ scale: scale });
+
+                            const canvas = document.createElement('canvas');
+                            canvas.width = viewport.width;
+                            canvas.height = viewport.height;
+
+                            const context = canvas.getContext('2d');
+                            await page.render({
+                                canvasContext: context,
+                                viewport: viewport
+                            }).promise;
+
+                            // Canvas als PNG in PDF einfügen
+                            const imgData = canvas.toDataURL('image/png');
+                            const pngImage = await newPdf.embedPng(imgData);
+
+                            // Seite mit Original-Dimensionen erstellen
+                            const pdfPage = newPdf.addPage([viewport.width, viewport.height]);
+                            pdfPage.drawImage(pngImage, {
+                                x: 0,
+                                y: 0,
+                                width: viewport.width,
+                                height: viewport.height
+                            });
+
+                            console.log(`Seite ${pageNum} als Bild gerendert`);
+                        }
+                    }
 
                     // PDF-Metadaten setzen für Windows-Sicherheit
                     const now = new Date();
