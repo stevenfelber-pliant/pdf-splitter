@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Splitter - Rechnungen automatisch trennen</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        main {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 2rem;
+        }
+
+        .section {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 3px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f7fafc;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: #667eea;
+            background: #edf2f7;
+            transform: scale(1.02);
+        }
+
+        .drop-zone svg {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .drop-zone-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+
+        .drop-zone-hint {
+            font-size: 0.9rem;
+            color: #718096;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .info-item {
+            padding: 0.5rem 0;
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: #718096;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        /* Invoice List */
+        .invoice-list {
+            margin: 1.5rem 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .invoice-item {
+            background: #f7fafc;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .invoice-item:hover {
+            background: #edf2f7;
+            transform: translateX(4px);
+        }
+
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .invoice-number {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .invoice-badge {
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .invoice-details {
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        /* Results */
+        .results-list {
+            margin: 1.5rem 0;
+        }
+
+        .result-item {
+            background: #f0fff4;
+            border-left: 4px solid #48bb78;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .result-info h3 {
+            color: #2d3748;
+            margin-bottom: 0.25rem;
+        }
+
+        .result-info p {
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #cbd5e0;
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #loading-text {
+            color: #4a5568;
+            font-size: 1.1rem;
+            margin-top: 1rem;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 2rem;
+            opacity: 0.9;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            main {
+                padding: 1.5rem;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .result-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📄 PDF Splitter</h1>
+            <p>Rechnungen automatisch erkennen und trennen</p>
+            <div class="badge">🌐 Läuft komplett im Browser - Keine Installation nötig!</div>
+        </header>
+
+        <main>
+            <!-- Upload Bereich -->
+            <div id="upload-section" class="section">
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                        <p class="drop-zone-text">PDF hier ablegen oder klicken zum Auswählen</p>
+                        <p class="drop-zone-hint">Ihre Daten bleiben auf Ihrem Computer</p>
+                    </div>
+                    <input type="file" id="file-input" accept=".pdf" hidden>
+                </div>
+            </div>
+
+            <!-- Analyse Bereich -->
+            <div id="analysis-section" class="section hidden">
+                <h2>📊 Analyse-Ergebnis</h2>
+                <div class="info-box">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Datei</div>
+                            <div id="file-name" class="info-value">-</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Gesamtseiten</div>
+                            <div id="total-pages" class="info-value">-</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Erkannte Rechnungen</div>
+                            <div id="detected-invoices" class="info-value">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="invoice-list" class="invoice-list"></div>
+
+                <div class="button-group">
+                    <button id="split-btn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        PDF jetzt teilen
+                    </button>
+                    <button id="cancel-btn" class="btn btn-secondary">Neue Datei</button>
+                </div>
+            </div>
+
+            <!-- Ergebnis Bereich -->
+            <div id="results-section" class="section hidden">
+                <h2>✅ PDFs erfolgreich geteilt</h2>
+
+                <div class="progress-bar">
+                    <div id="split-progress" class="progress-fill"></div>
+                </div>
+
+                <div id="results-list" class="results-list"></div>
+
+                <div class="button-group">
+                    <button id="download-all-btn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Alle als ZIP herunterladen
+                    </button>
+                    <button id="new-file-btn" class="btn btn-secondary">Neue Datei</button>
+                </div>
+            </div>
+
+            <!-- Lade-Animation -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p id="loading-text">Verarbeite PDF...</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>🔒 Alle Daten bleiben auf Ihrem Computer | 🎯 Intelligente Rechnungserkennung | 📄 Mehrseitige Dokumente</p>
+        </footer>
+    </div>
+
+    <!-- PDF.js für PDF-Lesen -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <!-- pdf-lib für PDF-Erstellung -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+    <!-- JSZip für ZIP-Downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        // PDF.js Worker initialisieren
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // Globale Variablen
+        let currentPdfFile = null;
+        let currentPdfDoc = null;
+        let detectedInvoices = [];
+        let splitPdfs = [];
+
+        // DOM Elemente
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const uploadSection = document.getElementById('upload-section');
+        const analysisSection = document.getElementById('analysis-section');
+        const resultsSection = document.getElementById('results-section');
+        const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loading-text');
+
+        // Event Listeners
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('dragleave', handleDragLeave);
+        dropZone.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+        document.getElementById('split-btn').addEventListener('click', splitPdf);
+        document.getElementById('cancel-btn').addEventListener('click', reset);
+        document.getElementById('new-file-btn').addEventListener('click', reset);
+        document.getElementById('download-all-btn').addEventListener('click', downloadAllAsZip);
+
+        // Drag & Drop Handlers
+        function handleDragOver(e) {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                processPdf(files[0]);
+            } else {
+                alert('Bitte wählen Sie eine PDF-Datei aus.');
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                processPdf(file);
+            }
+        }
+
+        // PDF Verarbeitung
+        async function processPdf(file) {
+            currentPdfFile = file;
+            showLoading('PDF wird analysiert...');
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                currentPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                // Rechnungen erkennen
+                detectedInvoices = await detectInvoices(currentPdfDoc);
+
+                // Ergebnisse anzeigen
+                displayAnalysis(file.name, currentPdfDoc.numPages, detectedInvoices);
+
+                hideLoading();
+                uploadSection.classList.add('hidden');
+                analysisSection.classList.remove('hidden');
+            } catch (error) {
+                console.error('Fehler beim Verarbeiten der PDF:', error);
+                alert('Fehler beim Verarbeiten der PDF. Bitte versuchen Sie es erneut.');
+                hideLoading();
+            }
+        }
+
+        // Rechnungserkennung
+        async function detectInvoices(pdfDoc) {
+            const invoices = [];
+            let currentInvoice = null;
+            const totalPages = pdfDoc.numPages;
+
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                const page = await pdfDoc.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                const text = textContent.items.map(item => item.str).join(' ');
+
+                const isInvoiceStart = detectInvoiceHeader(text);
+                const isEmpty = isEmptyPage(text);
+
+                if (isInvoiceStart) {
+                    // Neue Rechnung beginnt
+                    if (currentInvoice) {
+                        invoices.push(currentInvoice);
+                    }
+                    currentInvoice = {
+                        startPage: pageNum,
+                        endPage: pageNum,
+                        invoiceNumber: extractInvoiceNumber(text),
+                        pages: [pageNum]
+                    };
+                } else if (isEmpty && currentInvoice) {
+                    // Leerseite beendet aktuelle Rechnung
+                    invoices.push(currentInvoice);
+                    currentInvoice = null;
+                } else if (currentInvoice) {
+                    // Fortsetzung der aktuellen Rechnung
+                    currentInvoice.endPage = pageNum;
+                    currentInvoice.pages.push(pageNum);
+                }
+            }
+
+            // Letzte Rechnung hinzufügen
+            if (currentInvoice) {
+                invoices.push(currentInvoice);
+            }
+
+            // Falls keine Rechnungen erkannt wurden, gesamtes PDF als eine Rechnung behandeln
+            if (invoices.length === 0) {
+                invoices.push({
+                    startPage: 1,
+                    endPage: totalPages,
+                    invoiceNumber: 'Dokument',
+                    pages: Array.from({ length: totalPages }, (_, i) => i + 1)
+                });
+            }
+
+            return invoices;
+        }
+
+        // Prüft ob Text einen Rechnungskopf enthält
+        function detectInvoiceHeader(text) {
+            const keywords = [
+                /rechnung\s*(?:nr|nummer|#)?[:.\s]*\d+/i,
+                /invoice\s*(?:no|number|#)?[:.\s]*\d+/i,
+                /rechnungsnummer/i,
+                /invoice\s+date/i,
+                /re-\d+/i,
+                /facture\s+n°/i
+            ];
+
+            return keywords.some(pattern => pattern.test(text));
+        }
+
+        // Prüft ob Seite leer ist
+        function isEmptyPage(text) {
+            const cleanText = text.replace(/\s/g, '');
+            return cleanText.length < 50; // Weniger als 50 Zeichen = leer
+        }
+
+        // Extrahiert Rechnungsnummer
+        function extractInvoiceNumber(text) {
+            const patterns = [
+                /rechnung\s*(?:nr|nummer)?[:\s]*([A-Z0-9\-\/]+)/i,
+                /invoice\s*(?:no|number)?[:\s]*([A-Z0-9\-\/]+)/i,
+                /rechnungsnummer[:\s]*([A-Z0-9\-\/]+)/i,
+                /(RE-\d+)/i,
+                /([0-9]{4}[-\/][0-9]+)/
+            ];
+
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    return match[1].trim();
+                }
+            }
+
+            return null;
+        }
+
+        // Ergebnisse anzeigen
+        function displayAnalysis(fileName, totalPages, invoices) {
+            document.getElementById('file-name').textContent = fileName;
+            document.getElementById('total-pages').textContent = totalPages;
+            document.getElementById('detected-invoices').textContent = invoices.length;
+
+            const invoiceList = document.getElementById('invoice-list');
+            invoiceList.innerHTML = '';
+
+            invoices.forEach((invoice, index) => {
+                const pageCount = invoice.pages.length;
+                const div = document.createElement('div');
+                div.className = 'invoice-item';
+                div.innerHTML = `
+                    <div class="invoice-header">
+                        <span class="invoice-number">
+                            ${invoice.invoiceNumber || `Rechnung ${index + 1}`}
+                        </span>
+                        <span class="invoice-badge">${pageCount} Seite${pageCount !== 1 ? 'n' : ''}</span>
+                    </div>
+                    <div class="invoice-details">
+                        Seiten ${invoice.startPage} - ${invoice.endPage}
+                    </div>
+                `;
+                invoiceList.appendChild(div);
+            });
+        }
+
+        // PDF teilen
+        async function splitPdf() {
+            showLoading('PDFs werden erstellt...');
+            document.getElementById('split-btn').disabled = true;
+
+            try {
+                const arrayBuffer = await currentPdfFile.arrayBuffer();
+                splitPdfs = [];
+
+                for (let i = 0; i < detectedInvoices.length; i++) {
+                    const invoice = detectedInvoices[i];
+                    updateLoadingText(`Erstelle PDF ${i + 1} von ${detectedInvoices.length}...`);
+
+                    const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                    const newPdf = await PDFLib.PDFDocument.create();
+
+                    // Seiten kopieren
+                    const copiedPages = await newPdf.copyPages(
+                        pdfDoc,
+                        invoice.pages.map(p => p - 1) // 0-basiert
+                    );
+
+                    copiedPages.forEach(page => newPdf.addPage(page));
+
+                    const pdfBytes = await newPdf.save();
+                    const fileName = `${invoice.invoiceNumber || `Rechnung_${i + 1}`}.pdf`.replace(/[^a-zA-Z0-9\-_\.]/g, '_');
+
+                    splitPdfs.push({
+                        fileName: fileName,
+                        data: pdfBytes,
+                        invoice: invoice
+                    });
+
+                    // Fortschritt aktualisieren
+                    const progress = ((i + 1) / detectedInvoices.length) * 100;
+                    document.getElementById('split-progress').style.width = progress + '%';
+                }
+
+                displayResults();
+                hideLoading();
+                analysisSection.classList.add('hidden');
+                resultsSection.classList.remove('hidden');
+                document.getElementById('split-btn').disabled = false;
+            } catch (error) {
+                console.error('Fehler beim Teilen der PDF:', error);
+                alert('Fehler beim Teilen der PDF. Bitte versuchen Sie es erneut.');
+                hideLoading();
+                document.getElementById('split-btn').disabled = false;
+            }
+        }
+
+        // Ergebnisse anzeigen
+        function displayResults() {
+            const resultsList = document.getElementById('results-list');
+            resultsList.innerHTML = '';
+
+            splitPdfs.forEach((pdf, index) => {
+                const div = document.createElement('div');
+                div.className = 'result-item';
+                div.innerHTML = `
+                    <div class="result-info">
+                        <h3>${pdf.fileName}</h3>
+                        <p>${pdf.invoice.pages.length} Seite${pdf.invoice.pages.length !== 1 ? 'n' : ''} (${pdf.invoice.startPage} - ${pdf.invoice.endPage})</p>
+                    </div>
+                    <button class="btn btn-success btn-small" onclick="downloadPdf(${index})">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download
+                    </button>
+                `;
+                resultsList.appendChild(div);
+            });
+        }
+
+        // Einzelne PDF herunterladen
+        window.downloadPdf = function(index) {
+            const pdf = splitPdfs[index];
+            const blob = new Blob([pdf.data], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = pdf.fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        // Alle PDFs als ZIP herunterladen
+        async function downloadAllAsZip() {
+            showLoading('ZIP-Archiv wird erstellt...');
+
+            try {
+                const zip = new JSZip();
+
+                splitPdfs.forEach(pdf => {
+                    zip.file(pdf.fileName, pdf.data);
+                });
+
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'rechnungen.zip';
+                a.click();
+                URL.revokeObjectURL(url);
+
+                hideLoading();
+            } catch (error) {
+                console.error('Fehler beim Erstellen der ZIP:', error);
+                alert('Fehler beim Erstellen der ZIP-Datei.');
+                hideLoading();
+            }
+        }
+
+        // Zurücksetzen
+        function reset() {
+            currentPdfFile = null;
+            currentPdfDoc = null;
+            detectedInvoices = [];
+            splitPdfs = [];
+            fileInput.value = '';
+            document.getElementById('split-progress').style.width = '0%';
+
+            uploadSection.classList.remove('hidden');
+            analysisSection.classList.add('hidden');
+            resultsSection.classList.add('hidden');
+        }
+
+        // Loading Helpers
+        function showLoading(text = 'Verarbeite...') {
+            loadingText.textContent = text;
+            loading.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            loading.classList.add('hidden');
+        }
+
+        function updateLoadingText(text) {
+            loadingText.textContent = text;
+        }
+    </script>
+</body>
+</html>

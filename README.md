@@ -9,8 +9,24 @@ Eine Web-Anwendung zum automatischen Erkennen und Trennen von Rechnungen in PDF-
 - 🌐 Web-Interface mit Drag & Drop
 - 📄 Unterstützt mehrseitige Rechnungen
 - ⚡ Schnelle Verarbeitung
+- 🔒 Datenschutz: Alle Daten bleiben auf Ihrem Computer
 
-## Installation
+## Schnellstart - Browser-Version (empfohlen)
+
+**Keine Installation nötig!** Funktioniert komplett im Browser.
+
+1. Öffnen Sie `browser-app.html` direkt in Ihrem Browser (Doppelklick auf die Datei)
+2. Fertig! Sie können sofort PDFs hochladen und teilen
+
+**Vorteile:**
+- ✅ Keine Installation erforderlich
+- ✅ Funktioniert offline
+- ✅ Alle Daten bleiben lokal auf Ihrem Computer
+- ✅ Funktioniert auf Windows, Mac und Linux
+
+## Server-Version (für erweiterte Nutzung)
+
+Falls Sie die Python-basierte Server-Version nutzen möchten:
 
 1. Repository klonen:
 ```bash
@@ -32,7 +48,16 @@ python app.py
 
 ## Verwendung
 
-### Web-Interface
+### Browser-Version (`browser-app.html`)
+
+1. **Upload**: PDF-Datei per Drag & Drop hochladen oder durch Klicken auswählen
+2. **Analyse**: Die Anwendung analysiert automatisch das PDF und zeigt erkannte Rechnungen an
+3. **Teilen**: Mit einem Klick wird das PDF in separate Dateien geteilt
+4. **Download**: Einzelne Rechnungen oder alle als ZIP herunterladen
+
+**Hinweis:** Die Browser-Version verarbeitet alles lokal in Ihrem Browser. Es werden keine Daten hochgeladen oder an einen Server gesendet.
+
+### Server-Version (Web-Interface)
 
 1. **Upload**: PDF-Datei per Drag & Drop hochladen oder durch Klicken auswählen
 2. **Analyse**: Die Anwendung analysiert automatisch das PDF und zeigt erkannte Rechnungen an
@@ -74,20 +99,21 @@ Die Anwendung nutzt zwei Erkennungsmethoden:
 
 ```
 pdf-splitter/
-├── app.py              # Flask Web-Server
-├── pdf_processor.py    # PDF-Verarbeitung und Splitting
-├── invoice_detector.py # Rechnungserkennung
+├── browser-app.html    # 🌟 Browser-Version (EMPFOHLEN - einfach öffnen!)
+├── app.py              # Flask Web-Server (Server-Version)
+├── pdf_processor.py    # PDF-Verarbeitung und Splitting (Server-Version)
+├── invoice_detector.py # Rechnungserkennung (Server-Version)
 ├── test_example.py     # Beispiel-Tests
-├── requirements.txt    # Python Dependencies
-├── static/             # CSS, JavaScript
+├── requirements.txt    # Python Dependencies (nur für Server-Version)
+├── static/             # CSS, JavaScript (Server-Version)
 │   ├── css/
 │   │   └── style.css
 │   └── js/
 │       └── app.js
-├── templates/          # HTML Templates
+├── templates/          # HTML Templates (Server-Version)
 │   └── index.html
-├── uploads/            # Temporäre Uploads (wird automatisch erstellt)
-└── output/             # Geteilte PDFs (wird automatisch erstellt)
+├── uploads/            # Temporäre Uploads (Server-Version)
+└── output/             # Geteilte PDFs (Server-Version)
 ```
 
 ## Erkennungsmethoden
@@ -111,6 +137,14 @@ Die Anwendung verwendet intelligente Kombinationen mehrerer Erkennungsmethoden:
 
 ## Technologie-Stack
 
+### Browser-Version
+- **PDF-Lesen**: PDF.js (Mozilla)
+- **PDF-Erstellung**: pdf-lib
+- **ZIP-Archiv**: JSZip
+- **Frontend**: Vanilla JavaScript, CSS3
+- **UI/UX**: Responsive Design mit Drag & Drop
+
+### Server-Version
 - **Backend**: Flask (Python Web-Framework)
 - **PDF-Verarbeitung**: pypdf, pdfplumber
 - **Frontend**: Vanilla JavaScript, CSS3
