@@ -1,5 +1,162 @@
 # Changelog - PDF Splitter Verbesserungen
 
+## Version 3.0 - Interaktive Vorschau mit Drag & Drop
+
+### 🎨 Komplett neue Benutzeroberfläche!
+
+**Was ist neu:**
+
+Die App zeigt jetzt **alle Seiten als Miniaturansichten** an, gruppiert nach erkannten Rechnungen. Sie können die Aufteilung **vor dem Teilen visuell prüfen und anpassen**!
+
+#### Interaktive Vorschau
+- **Miniaturansichten**: Jede PDF-Seite wird als kleines Vorschaubild angezeigt
+- **Visuelle Gruppierung**: Erkannte Rechnungen werden in Zeilen/Gruppen dargestellt
+- **Echtzeit-Rendering**: Canvas-basierte Darstellung aller Seiten
+
+#### Drag & Drop Bearbeitung
+- **Seiten verschieben**: Ziehen Sie Seiten per Drag & Drop zwischen Gruppen
+- **Volle Kontrolle**: Passen Sie die automatische Erkennung nach Ihren Wünschen an
+- **Intuitive Bedienung**: Einfaches Grab & Drop Interface
+
+#### Gruppenverwaltung
+- **Gruppen benennen**: Klicken Sie auf den Namen, um ihn zu ändern
+- **Gruppen löschen**: Entfernen Sie ungewollte Gruppen (Seiten werden verschoben)
+- **Gruppen hinzufügen**: Erstellen Sie neue Gruppen mit dem ➕-Button
+- **Leere Gruppen**: Werden automatisch entfernt beim Teilen
+
+#### Visuelles Feedback
+- **Seitennummern**: Jede Vorschau zeigt die Seitennummer an
+- **Drag-Effekte**: Visuelle Hervorhebung beim Ziehen
+- **Gruppen-Zähler**: Zeigt Anzahl der Seiten pro Gruppe
+- **Icons**: 📄 für Rechnungen, 🧾 für Kassenbons
+
+### 🎯 Workflow
+
+**Vorher (Version 2.x):**
+```
+1. PDF hochladen
+2. Automatische Erkennung
+3. Liste anschauen
+4. Hoffen dass es stimmt
+5. Teilen
+```
+
+**Jetzt (Version 3.0):**
+```
+1. PDF hochladen
+2. Automatische Erkennung
+3. VISUELL PRÜFEN - Alle Seiten sehen
+4. Per Drag & Drop anpassen
+5. Gruppen umbenennen/löschen/hinzufügen
+6. DANN ERST teilen - mit voller Kontrolle
+```
+
+### 💡 Anwendungsbeispiele
+
+#### Beispiel 1: Falsch erkannte mehrseitige Rechnung
+```
+VORHER:
+❌ Seite 1-3 wurden in 3 einzelne PDFs geteilt
+
+JETZT:
+✅ Seite 2 und 3 einfach in Gruppe 1 ziehen
+✅ Alle 3 Seiten in einem PDF
+```
+
+#### Beispiel 2: Dokumente manuell trennen
+```
+VORHER:
+❌ Zwei Rechnungen wurden als eine erkannt
+
+JETZT:
+✅ Neue Gruppe hinzufügen
+✅ Seiten 5-8 in neue Gruppe ziehen
+✅ Beide Rechnungen korrekt getrennt
+```
+
+#### Beispiel 3: Reihenfolge anpassen
+```
+VORHER:
+❌ Reihenfolge festgelegt nach Erkennung
+
+JETZT:
+✅ Gruppen neu anordnen (werden der Reihe nach gespeichert)
+✅ Namen anpassen
+✅ Logische Sortierung
+```
+
+### 🔧 Technische Details
+
+#### Canvas-basierte Thumbnails
+- PDF.js render API mit scale=0.3
+- Async Generierung mit Progress-Anzeige
+- Cached Thumbnails für Performance
+- Automatisches Cloning für Drag & Drop
+
+#### Drag & Drop Implementation
+- Native HTML5 Drag & Drop API
+- DataTransfer für Seiteninformationen
+- Visual feedback während Drag
+- Automatische Sortierung nach Drop
+
+#### State Management
+```javascript
+invoiceGroups = [
+  {
+    id: 'group-0',
+    name: 'Rechnung 2024-001',
+    isReceipt: false,
+    pages: [1, 2, 3]
+  },
+  {
+    id: 'group-1',
+    name: 'Kassenbon',
+    isReceipt: true,
+    pages: [4]
+  }
+]
+```
+
+#### Neue Funktionen
+- `generateThumbnails()` - Erstellt Canvas-Vorschauen
+- `renderPreview()` - Rendert Gruppen-UI
+- `createPageThumbnail()` - Erstellt einzelne Vorschau
+- `handleDragStart/Drop/End()` - Drag & Drop Logic
+- `addNewGroup()` - Gruppenverwaltung
+- `deleteGroup()` - Gruppenverwaltung
+- `updateGroupName()` - Namen bearbeiten
+
+### 📱 Responsive Design
+
+- Thumbnails passen sich Bildschirmgröße an
+- Flex-Wrap für automatischen Umbruch
+- Touch-freundlich (auch auf Tablets/Phones)
+- Scrollbare Container bei vielen Seiten
+
+### ⚡ Performance
+
+- Thumbnails werden nur einmal generiert
+- Canvas-Cloning statt Re-Rendering
+- Effiziente DOM-Updates
+- Smooth Drag & Drop
+
+### 🎓 Für Entwickler
+
+**CSS-Klassen:**
+- `.preview-container` - Hauptcontainer
+- `.invoice-group` - Einzelne Gruppe
+- `.pages-container` - Seiten innerhalb Gruppe
+- `.page-thumbnail` - Einzelne Seitenvorschau
+- `.dragging` - Während Drag-Operation
+
+**Events:**
+- `dragstart` - Seite wird gegriffen
+- `dragover` - Seite schwebt über Ziel
+- `drop` - Seite wird losgelassen
+- `dragend` - Drag-Operation beendet
+
+---
+
 ## Version 2.1 - Windows SmartScreen-Kompatibilität
 
 ### 🛡️ Behobenes Problem: Windows-Sicherheitswarnung

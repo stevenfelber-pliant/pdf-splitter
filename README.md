@@ -4,9 +4,11 @@ Eine Web-Anwendung zum automatischen Erkennen und Trennen von Rechnungen in PDF-
 
 ## Features
 
+- 🖼️ **NEU:** Interaktive Vorschau mit Miniaturansichten aller Seiten
+- 🎨 **NEU:** Drag & Drop zum Verschieben von Seiten zwischen Gruppen
+- ✏️ **NEU:** Gruppen umbenennen, löschen und hinzufügen
 - 🔍 Automatische Erkennung von Rechnungen (auch mehrseitig)
 - 🎯 Kombinierte Text- und visuelle Analyse
-- 🌐 Web-Interface mit Drag & Drop
 - 📄 Unterstützt mehrseitige Rechnungen
 - ⚡ Schnelle Verarbeitung
 - 🔒 Datenschutz: Alle Daten bleiben auf Ihrem Computer
@@ -51,11 +53,18 @@ python app.py
 ### Browser-Version (`browser-app.html`)
 
 1. **Upload**: PDF-Datei per Drag & Drop hochladen oder durch Klicken auswählen
-2. **Analyse**: Die Anwendung analysiert automatisch das PDF und zeigt erkannte Rechnungen an
-3. **Teilen**: Mit einem Klick wird das PDF in separate Dateien geteilt
-4. **Download**: Einzelne Rechnungen oder alle als ZIP herunterladen
+2. **Analyse**: Die Anwendung analysiert automatisch und zeigt **Miniaturansichten aller Seiten**
+3. **Vorschau prüfen**: Sehen Sie alle Seiten gruppiert nach erkannten Rechnungen
+4. **Anpassen (NEU)**:
+   - Seiten per Drag & Drop zwischen Gruppen verschieben
+   - Gruppen umbenennen (einfach auf Namen klicken)
+   - Gruppen löschen oder neue hinzufügen
+5. **Teilen**: Erst NACH der visuellen Kontrolle wird das PDF geteilt
+6. **Download**: Einzelne Rechnungen oder alle als ZIP herunterladen
 
 **Hinweis:** Die Browser-Version verarbeitet alles lokal in Ihrem Browser. Es werden keine Daten hochgeladen oder an einen Server gesendet.
+
+**Tipp:** Mit der interaktiven Vorschau haben Sie die volle Kontrolle! Prüfen Sie die Aufteilung visuell und passen Sie sie bei Bedarf an, bevor Sie teilen.
 
 ### Server-Version (Web-Interface)
 

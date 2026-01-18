@@ -136,41 +136,50 @@
             color: #2d3748;
         }
 
-        /* Invoice List */
-        .invoice-list {
+        /* Preview Container */
+        .preview-container {
             margin: 1.5rem 0;
-            max-height: 400px;
+            max-height: 600px;
             overflow-y: auto;
-        }
-
-        .invoice-item {
             background: #f7fafc;
-            border-left: 4px solid #667eea;
             border-radius: 8px;
             padding: 1rem;
-            margin-bottom: 1rem;
-            transition: all 0.2s ease;
         }
 
-        .invoice-item:hover {
+        .invoice-group {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .invoice-group.drag-over {
             background: #edf2f7;
-            transform: translateX(4px);
+            border-color: #5568d3;
+            transform: scale(1.02);
         }
 
-        .invoice-header {
+        .group-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e2e8f0;
         }
 
-        .invoice-number {
+        .group-title {
             font-size: 1.1rem;
             font-weight: 700;
             color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .invoice-badge {
+        .group-badge {
             background: #667eea;
             color: white;
             padding: 0.25rem 0.75rem;
@@ -179,9 +188,84 @@
             font-weight: 600;
         }
 
-        .invoice-details {
-            font-size: 0.9rem;
+        .pages-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            min-height: 140px;
+            padding: 0.5rem;
+        }
+
+        .page-thumbnail {
+            position: relative;
+            width: 120px;
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+
+        .page-thumbnail:active {
+            cursor: grabbing;
+        }
+
+        .page-thumbnail.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        .page-thumbnail:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .thumbnail-canvas {
+            width: 100%;
+            height: auto;
+            border: 2px solid #e2e8f0;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .page-number {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .add-group-btn {
+            width: 100%;
+            padding: 1rem;
+            background: #e2e8f0;
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
             color: #4a5568;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .add-group-btn:hover {
+            background: #cbd5e0;
+            border-color: #a0aec0;
+        }
+
+        .hint-box {
+            background: #edf2f7;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .hint-box p {
+            margin: 0;
+            color: #4a5568;
+            font-size: 0.9rem;
         }
 
         /* Progress Bar */
@@ -367,7 +451,7 @@
                 </div>
             </div>
 
-            <!-- Analyse Bereich -->
+            <!-- Analyse Bereich mit interaktiver Vorschau -->
             <div id="analysis-section" class="section hidden">
                 <h2>📊 Analyse-Ergebnis</h2>
                 <div class="info-box">
@@ -387,7 +471,17 @@
                     </div>
                 </div>
 
-                <div id="invoice-list" class="invoice-list"></div>
+                <div class="hint-box">
+                    <p>💡 <strong>Tipp:</strong> Ziehen Sie Seiten per Drag & Drop zwischen den Gruppen, um die Aufteilung anzupassen. Jede Zeile wird eine separate PDF-Datei.</p>
+                </div>
+
+                <div id="preview-container" class="preview-container">
+                    <!-- Wird dynamisch mit Gruppen gefüllt -->
+                </div>
+
+                <button id="add-group-btn" class="add-group-btn">
+                    ➕ Neue Gruppe hinzufügen
+                </button>
 
                 <div class="button-group">
                     <button id="split-btn" class="btn btn-primary">
@@ -496,6 +590,9 @@
         let currentPdfDoc = null;
         let detectedInvoices = [];
         let splitPdfs = [];
+        let pageThumbnails = [];  // Speichert Canvas-Elemente für jede Seite
+        let draggedElement = null;
+        let invoiceGroups = [];  // Array von Gruppen mit Seiten
 
         // DOM Elemente
         const dropZone = document.getElementById('drop-zone');
@@ -516,6 +613,7 @@
         document.getElementById('cancel-btn').addEventListener('click', reset);
         document.getElementById('new-file-btn').addEventListener('click', reset);
         document.getElementById('download-all-btn').addEventListener('click', downloadAllAsZip);
+        document.getElementById('add-group-btn').addEventListener('click', addNewGroup);
         document.getElementById('help-link').addEventListener('click', (e) => {
             e.preventDefault();
             document.getElementById('help-dialog').style.display = 'block';
@@ -820,41 +918,254 @@
                 .substring(0, 50);                 // Maximale Länge
         }
 
-        // Ergebnisse anzeigen
-        function displayAnalysis(fileName, totalPages, invoices) {
+        // Ergebnisse anzeigen mit interaktiver Vorschau
+        async function displayAnalysis(fileName, totalPages, invoices) {
             document.getElementById('file-name').textContent = fileName;
             document.getElementById('total-pages').textContent = totalPages;
             document.getElementById('detected-invoices').textContent = invoices.length;
 
-            const invoiceList = document.getElementById('invoice-list');
-            invoiceList.innerHTML = '';
+            // Thumbnails generieren
+            showLoading('Erstelle Vorschaubilder...');
+            await generateThumbnails();
+            hideLoading();
 
-            invoices.forEach((invoice, index) => {
-                const pageCount = invoice.pages.length;
-                const div = document.createElement('div');
-                div.className = 'invoice-item';
+            // Gruppen initialisieren
+            invoiceGroups = invoices.map((invoice, index) => ({
+                id: `group-${index}`,
+                name: invoice.invoiceNumber || (invoice.isReceipt ? 'Kassenbon' : `Rechnung ${index + 1}`),
+                isReceipt: invoice.isReceipt,
+                pages: [...invoice.pages]
+            }));
 
-                // Icon basierend auf Typ
-                const icon = invoice.isReceipt ? '🧾' : '📄';
-                const type = invoice.isReceipt ? 'Kassenbon' : 'Rechnung';
+            // UI rendern
+            renderPreview();
+        }
 
-                div.innerHTML = `
-                    <div class="invoice-header">
-                        <span class="invoice-number">
-                            ${icon} ${invoice.invoiceNumber || `${type} ${index + 1}`}
-                        </span>
-                        <span class="invoice-badge">${pageCount} Seite${pageCount !== 1 ? 'n' : ''}</span>
+        // Generiert Thumbnail-Canvas für alle Seiten
+        async function generateThumbnails() {
+            pageThumbnails = [];
+            const scale = 0.3;  // Kleine Vorschau
+
+            for (let pageNum = 1; pageNum <= currentPdfDoc.numPages; pageNum++) {
+                const page = await currentPdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale });
+
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                canvas.className = 'thumbnail-canvas';
+
+                const context = canvas.getContext('2d');
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+
+                pageThumbnails.push(canvas);
+            }
+        }
+
+        // Rendert die Preview mit allen Gruppen
+        function renderPreview() {
+            const container = document.getElementById('preview-container');
+            container.innerHTML = '';
+
+            invoiceGroups.forEach((group, index) => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'invoice-group';
+                groupDiv.dataset.groupId = group.id;
+
+                // Header
+                const icon = group.isReceipt ? '🧾' : '📄';
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'group-header';
+                headerDiv.innerHTML = `
+                    <div class="group-title">
+                        ${icon}
+                        <input type="text" value="${group.name}"
+                               onchange="updateGroupName('${group.id}', this.value)"
+                               style="border: none; background: transparent; font-size: inherit; font-weight: inherit; color: inherit; width: auto; min-width: 200px;">
                     </div>
-                    <div class="invoice-details">
-                        Seiten ${invoice.startPage}${invoice.startPage !== invoice.endPage ? ' - ' + invoice.endPage : ''}
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span class="group-badge">${group.pages.length} Seite${group.pages.length !== 1 ? 'n' : ''}</span>
+                        ${invoiceGroups.length > 1 ? `<button onclick="deleteGroup('${group.id}')" style="background: #fc8181; color: white; border: none; border-radius: 4px; padding: 0.25rem 0.5rem; cursor: pointer;">🗑️</button>` : ''}
                     </div>
                 `;
-                invoiceList.appendChild(div);
+                groupDiv.appendChild(headerDiv);
+
+                // Pages Container
+                const pagesDiv = document.createElement('div');
+                pagesDiv.className = 'pages-container';
+                pagesDiv.dataset.groupId = group.id;
+
+                // Drag & Drop Events für Container
+                pagesDiv.addEventListener('dragover', handleDragOver);
+                pagesDiv.addEventListener('drop', handleDrop);
+                pagesDiv.addEventListener('dragleave', handleDragLeave);
+
+                // Seiten hinzufügen
+                group.pages.forEach(pageNum => {
+                    const pageDiv = createPageThumbnail(pageNum, group.id);
+                    pagesDiv.appendChild(pageDiv);
+                });
+
+                groupDiv.appendChild(pagesDiv);
+                container.appendChild(groupDiv);
             });
         }
 
-        // PDF teilen
+        // Erstellt ein Thumbnail-Element für eine Seite
+        function createPageThumbnail(pageNum, groupId) {
+            const pageDiv = document.createElement('div');
+            pageDiv.className = 'page-thumbnail';
+            pageDiv.draggable = true;
+            pageDiv.dataset.pageNum = pageNum;
+            pageDiv.dataset.groupId = groupId;
+
+            // Canvas hinzufügen
+            const canvas = pageThumbnails[pageNum - 1].cloneNode(true);
+            pageDiv.appendChild(canvas);
+
+            // Seitennummer-Badge
+            const badge = document.createElement('div');
+            badge.className = 'page-number';
+            badge.textContent = pageNum;
+            pageDiv.appendChild(badge);
+
+            // Drag Events
+            pageDiv.addEventListener('dragstart', handleDragStart);
+            pageDiv.addEventListener('dragend', handleDragEnd);
+
+            return pageDiv;
+        }
+
+        // Drag & Drop Handlers
+        function handleDragStart(e) {
+            draggedElement = e.target.closest('.page-thumbnail');
+            draggedElement.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', draggedElement.innerHTML);
+        }
+
+        function handleDragEnd(e) {
+            if (draggedElement) {
+                draggedElement.classList.remove('dragging');
+                draggedElement = null;
+            }
+            // Remove drag-over class from all containers
+            document.querySelectorAll('.pages-container').forEach(container => {
+                container.closest('.invoice-group').classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+
+            const container = e.currentTarget;
+            container.closest('.invoice-group').classList.add('drag-over');
+
+            return false;
+        }
+
+        function handleDragLeave(e) {
+            const container = e.currentTarget;
+            container.closest('.invoice-group').classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            e.preventDefault();
+
+            const targetContainer = e.currentTarget;
+            const targetGroupId = targetContainer.dataset.groupId;
+
+            if (draggedElement) {
+                const pageNum = parseInt(draggedElement.dataset.pageNum);
+                const sourceGroupId = draggedElement.dataset.groupId;
+
+                if (sourceGroupId !== targetGroupId) {
+                    // Seite von alter Gruppe entfernen
+                    const sourceGroup = invoiceGroups.find(g => g.id === sourceGroupId);
+                    sourceGroup.pages = sourceGroup.pages.filter(p => p !== pageNum);
+
+                    // Seite zu neuer Gruppe hinzufügen
+                    const targetGroup = invoiceGroups.find(g => g.id === targetGroupId);
+                    targetGroup.pages.push(pageNum);
+                    targetGroup.pages.sort((a, b) => a - b);
+
+                    // Leere Gruppen entfernen (außer es ist die einzige)
+                    if (sourceGroup.pages.length === 0 && invoiceGroups.length > 1) {
+                        invoiceGroups = invoiceGroups.filter(g => g.id !== sourceGroupId);
+                    }
+
+                    // UI aktualisieren
+                    renderPreview();
+                }
+            }
+
+            return false;
+        }
+
+        // Gruppenverwaltung
+        function updateGroupName(groupId, newName) {
+            const group = invoiceGroups.find(g => g.id === groupId);
+            if (group) {
+                group.name = newName;
+            }
+        }
+
+        function deleteGroup(groupId) {
+            if (invoiceGroups.length <= 1) {
+                alert('Sie müssen mindestens eine Gruppe behalten.');
+                return;
+            }
+
+            const group = invoiceGroups.find(g => g.id === groupId);
+            if (group && group.pages.length > 0) {
+                if (!confirm(`Gruppe "${group.name}" mit ${group.pages.length} Seite(n) wirklich löschen? Die Seiten werden zur ersten Gruppe verschoben.`)) {
+                    return;
+                }
+
+                // Seiten zur ersten anderen Gruppe verschieben
+                const firstOtherGroup = invoiceGroups.find(g => g.id !== groupId);
+                firstOtherGroup.pages.push(...group.pages);
+                firstOtherGroup.pages.sort((a, b) => a - b);
+            }
+
+            invoiceGroups = invoiceGroups.filter(g => g.id !== groupId);
+            renderPreview();
+        }
+
+        function addNewGroup() {
+            const newId = `group-${Date.now()}`;
+            invoiceGroups.push({
+                id: newId,
+                name: `Neue Gruppe ${invoiceGroups.length + 1}`,
+                isReceipt: false,
+                pages: []
+            });
+            renderPreview();
+        }
+
+        // Macht Funktionen global verfügbar
+        window.updateGroupName = updateGroupName;
+        window.deleteGroup = deleteGroup;
+
+        // PDF teilen basierend auf bearbeiteten Gruppen
         async function splitPdf() {
+            // Leere Gruppen entfernen
+            const validGroups = invoiceGroups.filter(g => g.pages.length > 0);
+
+            if (validGroups.length === 0) {
+                alert('Keine Gruppen mit Seiten vorhanden!');
+                return;
+            }
+
             showLoading('PDFs werden erstellt...');
             document.getElementById('split-btn').disabled = true;
 
@@ -865,8 +1176,8 @@
                 // Validierung: Alle Seiten prüfen
                 const totalPages = currentPdfDoc.numPages;
                 const assignedPages = new Set();
-                detectedInvoices.forEach(inv => {
-                    inv.pages.forEach(p => assignedPages.add(p));
+                validGroups.forEach(group => {
+                    group.pages.forEach(p => assignedPages.add(p));
                 });
 
                 // Warnung wenn Seiten fehlen
@@ -875,20 +1186,21 @@
 
                 if (missingPages.length > 0) {
                     console.warn('WARNUNG: Folgende Seiten wurden nicht zugewiesen:', missingPages);
-                    alert(`WARNUNG: ${missingPages.length} Seite(n) wurden nicht zugewiesen! Sie werden in "Fehlende_Seiten.pdf" gespeichert.`);
+                    const addMissing = confirm(`WARNUNG: ${missingPages.length} Seite(n) wurden nicht zugewiesen!\n\nMöchten Sie diese Seiten in "Fehlende_Seiten.pdf" speichern?`);
 
-                    // Fehlende Seiten als eigenes Dokument hinzufügen
-                    detectedInvoices.push({
-                        startPage: Math.min(...missingPages),
-                        endPage: Math.max(...missingPages),
-                        invoiceNumber: 'Fehlende_Seiten',
-                        pages: missingPages.sort((a, b) => a - b)
-                    });
+                    if (addMissing) {
+                        validGroups.push({
+                            id: 'missing',
+                            name: 'Fehlende_Seiten',
+                            isReceipt: false,
+                            pages: missingPages.sort((a, b) => a - b)
+                        });
+                    }
                 }
 
-                for (let i = 0; i < detectedInvoices.length; i++) {
-                    const invoice = detectedInvoices[i];
-                    updateLoadingText(`Erstelle PDF ${i + 1} von ${detectedInvoices.length}...`);
+                for (let i = 0; i < validGroups.length; i++) {
+                    const group = validGroups[i];
+                    updateLoadingText(`Erstelle PDF ${i + 1} von ${validGroups.length}...`);
 
                     const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
                     const newPdf = await PDFLib.PDFDocument.create();
@@ -896,20 +1208,20 @@
                     // Seiten kopieren
                     const copiedPages = await newPdf.copyPages(
                         pdfDoc,
-                        invoice.pages.map(p => p - 1) // 0-basiert
+                        group.pages.map(p => p - 1) // 0-basiert
                     );
 
                     copiedPages.forEach(page => newPdf.addPage(page));
 
                     // PDF-Metadaten setzen für Windows-Sicherheit
                     const now = new Date();
-                    const docTitle = invoice.invoiceNumber || `Dokument ${i + 1}`;
+                    const docTitle = group.name || `Dokument ${i + 1}`;
 
                     newPdf.setTitle(docTitle);
                     newPdf.setAuthor('PDF Splitter');
                     newPdf.setSubject('Geteiltes Rechnungsdokument');
                     newPdf.setKeywords(['Rechnung', 'Invoice', 'Document']);
-                    newPdf.setProducer('PDF Splitter Browser App v2.0');
+                    newPdf.setProducer('PDF Splitter Browser App v2.1');
                     newPdf.setCreator('PDF Splitter (https://github.com)');
                     newPdf.setCreationDate(now);
                     newPdf.setModificationDate(now);
@@ -917,17 +1229,22 @@
                     const pdfBytes = await newPdf.save();
 
                     // Sicherer Dateiname mit Fallback
-                    let baseName = invoice.invoiceNumber || `Dokument_${String(i + 1).padStart(3, '0')}`;
+                    let baseName = group.name || `Dokument_${String(i + 1).padStart(3, '0')}`;
                     const fileName = sanitizeFileName(baseName) + '.pdf';
 
                     splitPdfs.push({
                         fileName: fileName,
                         data: pdfBytes,
-                        invoice: invoice
+                        invoice: {
+                            invoiceNumber: group.name,
+                            pages: group.pages,
+                            startPage: Math.min(...group.pages),
+                            endPage: Math.max(...group.pages)
+                        }
                     });
 
                     // Fortschritt aktualisieren
-                    const progress = ((i + 1) / detectedInvoices.length) * 100;
+                    const progress = ((i + 1) / validGroups.length) * 100;
                     document.getElementById('split-progress').style.width = progress + '%';
                 }
 
@@ -1078,8 +1395,12 @@
             currentPdfDoc = null;
             detectedInvoices = [];
             splitPdfs = [];
+            pageThumbnails = [];
+            invoiceGroups = [];
+            draggedElement = null;
             fileInput.value = '';
             document.getElementById('split-progress').style.width = '0%';
+            document.getElementById('preview-container').innerHTML = '';
 
             uploadSection.classList.remove('hidden');
             analysisSection.classList.add('hidden');
