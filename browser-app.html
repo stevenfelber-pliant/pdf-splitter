@@ -1310,7 +1310,7 @@
                     updateLoadingText(`Erstelle PDF ${i + 1} von ${validGroups.length}...`);
 
                     const { PDFDocument } = PDFLib;
-                    const pdfDoc = await PDFDocument.load(arrayBuffer);
+                    const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
                     const newPdf = await PDFDocument.create();
 
                     // Seiten kopieren
