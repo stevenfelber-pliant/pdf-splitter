@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Splitter - Rechnungen automatisch trennen</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📄 PDF Splitter</h1>
+            <p>Rechnungen automatisch erkennen und trennen</p>
+        </header>
+
+        <main>
+            <!-- Upload Bereich -->
+            <div id="upload-section" class="section">
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                        <p class="drop-zone-text">PDF hier ablegen oder klicken zum Auswählen</p>
+                        <p class="drop-zone-hint">Maximal 50MB</p>
+                    </div>
+                    <input type="file" id="file-input" accept=".pdf" hidden>
+                </div>
+            </div>
+
+            <!-- Analyse Bereich -->
+            <div id="analysis-section" class="section hidden">
+                <h2>Analyse-Ergebnis</h2>
+                <div class="info-box">
+                    <div class="info-item">
+                        <span class="info-label">Datei:</span>
+                        <span id="file-name" class="info-value"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Gesamtseiten:</span>
+                        <span id="total-pages" class="info-value"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Erkannte Rechnungen:</span>
+                        <span id="detected-invoices" class="info-value"></span>
+                    </div>
+                </div>
+
+                <div id="invoice-list" class="invoice-list"></div>
+
+                <div class="button-group">
+                    <button id="split-btn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                        PDF jetzt teilen
+                    </button>
+                    <button id="cancel-btn" class="btn btn-secondary">Abbrechen</button>
+                </div>
+            </div>
+
+            <!-- Ergebnis Bereich -->
+            <div id="results-section" class="section hidden">
+                <h2>✅ PDFs erfolgreich geteilt</h2>
+                <div id="results-list" class="results-list"></div>
+
+                <div class="button-group">
+                    <button id="download-all-btn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Alle als ZIP herunterladen
+                    </button>
+                    <button id="new-file-btn" class="btn btn-secondary">Neue Datei</button>
+                </div>
+            </div>
+
+            <!-- Lade-Animation -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p id="loading-text">Verarbeite PDF...</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>Kombinierte Text- und visuelle Erkennung | Unterstützt mehrseitige Rechnungen</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
