@@ -1,5 +1,70 @@
 # Changelog - PDF Splitter Verbesserungen
 
+## Version 2.1 - Windows SmartScreen-Kompatibilität
+
+### 🛡️ Behobenes Problem: Windows-Sicherheitswarnung
+
+**Problem:** Windows SmartScreen blockiert heruntergeladene PDFs mit Sicherheitswarnung ("Diese Datei kann eventuell Schaden auf dem Computer anrichten").
+
+**Lösung:**
+
+#### PDF-Metadaten hinzugefügt
+Alle generierten PDFs enthalten jetzt vollständige Metadaten:
+- **Title**: Dokumentname/Rechnungsnummer
+- **Author**: "PDF Splitter"
+- **Subject**: "Geteiltes Rechnungsdokument"
+- **Keywords**: ["Rechnung", "Invoice", "Document"]
+- **Producer**: "PDF Splitter Browser App v2.0"
+- **Creator**: "PDF Splitter (https://github.com)"
+- **Creation Date**: Aktuelles Datum/Zeit
+- **Modification Date**: Aktuelles Datum/Zeit
+
+Diese Metadaten helfen Windows zu erkennen, dass die PDFs legitim und lokal erstellt sind.
+
+#### Download-Optimierungen
+- **Native line endings**: `endings: 'native'` für plattformspezifische Zeilenumbrüche
+- **Security attributes**: `rel="noopener"` und `target="_self"` für sicherere Downloads
+- **Erhöhte Cleanup-Verzögerung**: 150ms statt 100ms für stabilere Downloads
+- **ZIP-Platform**: `platform: 'UNIX'` für bessere Entpack-Kompatibilität
+
+#### Hilfe-Dialog hinzugefügt
+- Neuer "Windows-Warnung? Hier klicken für Hilfe"-Link im Footer
+- Schritt-für-Schritt-Anleitungen zum Umgehen von Windows-Warnungen:
+  1. "Trotzdem öffnen" verwenden
+  2. Datei-Eigenschaften ändern
+  3. SmartScreen-Filter anpassen
+
+### 🔍 Warum erscheint die Warnung trotzdem manchmal?
+
+Windows SmartScreen kennzeichnet Downloads aus dem Browser automatisch als "potenziell unsicher". Dies ist ein Sicherheitsfeature von Windows, auch wenn die Dateien lokal erstellt werden.
+
+**Wichtig:** Die generierten PDFs sind sicher! Sie enthalten nur Ihre eigenen Daten und werden nicht von einem Server heruntergeladen.
+
+### 💡 Für Entwickler
+
+**Neue PDF-Metadaten-Funktion:**
+```javascript
+// Wird automatisch für jedes generierte PDF aufgerufen
+newPdf.setTitle(docTitle);
+newPdf.setAuthor('PDF Splitter');
+newPdf.setSubject('Geteiltes Rechnungsdokument');
+newPdf.setKeywords(['Rechnung', 'Invoice', 'Document']);
+newPdf.setProducer('PDF Splitter Browser App v2.0');
+newPdf.setCreator('PDF Splitter (https://github.com)');
+newPdf.setCreationDate(now);
+newPdf.setModificationDate(now);
+```
+
+**Optimierte Blob-Erstellung:**
+```javascript
+const blob = new Blob([pdf.data], {
+    type: 'application/pdf',
+    endings: 'native'  // Plattformspezifische Zeilenumbrüche
+});
+```
+
+---
+
 ## Version 2.0 - Verbesserte Erkennung und Sicherheit
 
 ### 🔧 Behobene Probleme

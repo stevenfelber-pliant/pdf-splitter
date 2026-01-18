@@ -433,7 +433,49 @@
 
         <footer>
             <p>🔒 Alle Daten bleiben auf Ihrem Computer | 🎯 Intelligente Rechnungserkennung | 📄 Mehrseitige Dokumente</p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">
+                💡 <a href="#" id="help-link" style="color: white; text-decoration: underline;">Windows-Warnung? Hier klicken für Hilfe</a>
+            </p>
         </footer>
+
+        <!-- Hilfe-Dialog -->
+        <div id="help-dialog" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; padding: 20px; overflow-y: auto;">
+            <div style="max-width: 600px; margin: 50px auto; background: white; border-radius: 16px; padding: 2rem;">
+                <h2 style="margin-bottom: 1rem;">🛡️ Windows-Sicherheitswarnung umgehen</h2>
+
+                <p style="margin-bottom: 1rem;">
+                    Wenn Windows beim Öffnen der PDFs eine Warnung anzeigt, ist das normal. Die PDFs werden lokal auf Ihrem Computer erstellt und sind sicher.
+                </p>
+
+                <h3 style="margin: 1.5rem 0 0.5rem 0;">Lösung 1: "Trotzdem öffnen"</h3>
+                <ol style="line-height: 1.8; margin-left: 1.5rem;">
+                    <li>Klicken Sie auf "Weitere Informationen" oder "Wie trägt dies zum Schutz des Computers bei"</li>
+                    <li>Klicken Sie dann auf "Trotzdem ausführen" oder "Zulassen"</li>
+                </ol>
+
+                <h3 style="margin: 1.5rem 0 0.5rem 0;">Lösung 2: Eigenschaften ändern</h3>
+                <ol style="line-height: 1.8; margin-left: 1.5rem;">
+                    <li>Rechtsklick auf die PDF-Datei → "Eigenschaften"</li>
+                    <li>Unten bei "Sicherheit": Häkchen bei "Zulassen" setzen</li>
+                    <li>Auf "OK" klicken</li>
+                </ol>
+
+                <h3 style="margin: 1.5rem 0 0.5rem 0;">Lösung 3: SmartScreen-Filter anpassen</h3>
+                <ol style="line-height: 1.8; margin-left: 1.5rem;">
+                    <li>Windows-Einstellungen → Update & Sicherheit → Windows-Sicherheit</li>
+                    <li>App- & Browsersteuerung → Zuverlässigkeitsbasierter Schutz</li>
+                    <li>Temporär auf "Warnen" statt "Blockieren" setzen</li>
+                </ol>
+
+                <div style="background: #f0fff4; border-left: 4px solid #48bb78; padding: 1rem; margin-top: 1.5rem; border-radius: 4px;">
+                    <strong>✅ Wichtig:</strong> Diese PDFs werden lokal auf Ihrem Computer erstellt und enthalten nur Ihre eigenen Daten. Sie sind sicher!
+                </div>
+
+                <button onclick="document.getElementById('help-dialog').style.display='none'" style="margin-top: 1.5rem; padding: 0.75rem 1.5rem; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; width: 100%;">
+                    Schließen
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- PDF.js für PDF-Lesen -->
@@ -474,6 +516,10 @@
         document.getElementById('cancel-btn').addEventListener('click', reset);
         document.getElementById('new-file-btn').addEventListener('click', reset);
         document.getElementById('download-all-btn').addEventListener('click', downloadAllAsZip);
+        document.getElementById('help-link').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('help-dialog').style.display = 'block';
+        });
 
         // Drag & Drop Handlers
         function handleDragOver(e) {
@@ -855,6 +901,19 @@
 
                     copiedPages.forEach(page => newPdf.addPage(page));
 
+                    // PDF-Metadaten setzen für Windows-Sicherheit
+                    const now = new Date();
+                    const docTitle = invoice.invoiceNumber || `Dokument ${i + 1}`;
+
+                    newPdf.setTitle(docTitle);
+                    newPdf.setAuthor('PDF Splitter');
+                    newPdf.setSubject('Geteiltes Rechnungsdokument');
+                    newPdf.setKeywords(['Rechnung', 'Invoice', 'Document']);
+                    newPdf.setProducer('PDF Splitter Browser App v2.0');
+                    newPdf.setCreator('PDF Splitter (https://github.com)');
+                    newPdf.setCreationDate(now);
+                    newPdf.setModificationDate(now);
+
                     const pdfBytes = await newPdf.save();
 
                     // Sicherer Dateiname mit Fallback
@@ -922,11 +981,21 @@
         // Einzelne PDF herunterladen
         window.downloadPdf = function(index) {
             const pdf = splitPdfs[index];
-            const blob = new Blob([pdf.data], { type: 'application/pdf' });
+
+            // Blob mit expliziten Optionen für bessere Windows-Kompatibilität
+            const blob = new Blob([pdf.data], {
+                type: 'application/pdf',
+                endings: 'native'
+            });
+
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = sanitizeFileName(pdf.fileName.replace('.pdf', '')) + '.pdf';
+
+            // Zusätzliche Attribute für bessere Kompatibilität
+            a.rel = 'noopener';
+            a.target = '_self';
 
             // Für bessere Browser-Kompatibilität
             document.body.appendChild(a);
@@ -936,7 +1005,7 @@
             setTimeout(() => {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-            }, 100);
+            }, 150);
         };
 
         // Alle PDFs als ZIP herunterladen
@@ -962,18 +1031,28 @@
                     type: 'blob',
                     compression: "DEFLATE",
                     compressionOptions: { level: 6 },
-                    mimeType: 'application/zip'
+                    mimeType: 'application/zip',
+                    platform: 'UNIX'  // Für bessere Kompatibilität
                 });
 
                 // Timestamp für eindeutigen Dateinamen
                 const timestamp = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
                 const zipFileName = `Rechnungen_${timestamp}.zip`;
 
-                // Download mit korrektem MIME-Type
-                const url = URL.createObjectURL(new Blob([zipBlob], { type: 'application/zip' }));
+                // Download mit korrektem MIME-Type und native endings
+                const finalBlob = new Blob([zipBlob], {
+                    type: 'application/zip',
+                    endings: 'native'
+                });
+
+                const url = URL.createObjectURL(finalBlob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = zipFileName;
+
+                // Zusätzliche Attribute für bessere Kompatibilität
+                a.rel = 'noopener';
+                a.target = '_self';
 
                 // Für bessere Browser-Kompatibilität
                 document.body.appendChild(a);
@@ -983,7 +1062,7 @@
                 setTimeout(() => {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                }, 100);
+                }, 150);
 
                 hideLoading();
             } catch (error) {
