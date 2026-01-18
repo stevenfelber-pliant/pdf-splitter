@@ -254,6 +254,25 @@
             border-color: #a0aec0;
         }
 
+        .insert-group-btn {
+            width: 100%;
+            padding: 0.5rem;
+            background: transparent;
+            border: 1px dashed #cbd5e0;
+            border-radius: 4px;
+            color: #718096;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 0.5rem 0;
+        }
+
+        .insert-group-btn:hover {
+            background: #edf2f7;
+            border-color: #667eea;
+            color: #667eea;
+        }
+
         .hint-box {
             background: #edf2f7;
             border-left: 4px solid #667eea;
@@ -1073,6 +1092,13 @@
 
                 groupDiv.appendChild(pagesDiv);
                 container.appendChild(groupDiv);
+
+                // Button zum Einfügen einer neuen Gruppe nach dieser
+                const insertBtn = document.createElement('button');
+                insertBtn.className = 'insert-group-btn';
+                insertBtn.textContent = '➕ Gruppe hier einfügen';
+                insertBtn.onclick = () => addNewGroup(index);
+                container.appendChild(insertBtn);
             });
         }
 
@@ -1212,20 +1238,30 @@
             renderPreview();
         }
 
-        function addNewGroup() {
+        function addNewGroup(afterIndex = null) {
             const newId = `group-${Date.now()}`;
-            invoiceGroups.push({
+            const newGroup = {
                 id: newId,
                 name: `Neue Gruppe ${invoiceGroups.length + 1}`,
                 isReceipt: false,
                 pages: []
-            });
+            };
+
+            if (afterIndex !== null && afterIndex >= 0 && afterIndex < invoiceGroups.length) {
+                // Gruppe nach dem angegebenen Index einfügen
+                invoiceGroups.splice(afterIndex + 1, 0, newGroup);
+            } else {
+                // Am Ende hinzufügen (Standard)
+                invoiceGroups.push(newGroup);
+            }
+
             renderPreview();
         }
 
         // Macht Funktionen global verfügbar
         window.updateGroupName = updateGroupName;
         window.deleteGroup = deleteGroup;
+        window.addNewGroup = addNewGroup;
 
         // PDF teilen basierend auf bearbeiteten Gruppen
         async function splitPdf() {
